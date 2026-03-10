@@ -7,21 +7,28 @@ type ActionResult = { success: true } | { success: false; error: string };
 
 export async function createTodo(formData: FormData): Promise<ActionResult> {
   const title = formData.get("title")?.toString().trim();
+
   if (!title) {
     return { success: false, error: "Title is required." };
   }
 
-  const description = formData.get("description")?.toString().trim() ?? null;
+  const description = formData.get("description")?.toString().trim() || null;
+  const dueDateValue = formData.get("dueDate")?.toString().trim() || null;
+
+  const dueDate = dueDateValue ? new Date(dueDateValue) : null;
 
   try {
     await prisma.todo.create({
       data: {
         title,
-        description: description || undefined,
+        description,
+        dueDate,
       },
     });
+
     revalidatePath("/todos");
-    revalidatePath("/dashboard"); // optional
+    revalidatePath("/dashboard");
+
     return { success: true };
   } catch (err) {
     console.error("createTodo error:", err);
@@ -31,23 +38,38 @@ export async function createTodo(formData: FormData): Promise<ActionResult> {
 
 export async function updateTodo(
   todoId: string,
-  data: { title?: string; description?: string | null; completed?: boolean }
+  data: {
+    title?: string;
+    description?: string | null;
+    completed?: boolean;
+    dueDate?: string | null;
+  }
 ): Promise<ActionResult> {
   if (data.title !== undefined && !data.title.trim()) {
     return { success: false, error: "Title cannot be empty." };
   }
 
   try {
-    await prisma.todo.updateMany({
+    const payload: any = {
+      ...(data.title !== undefined && { title: data.title.trim() }),
+      ...(data.description !== undefined && {
+        description: data.description?.trim() || null,
+      }),
+      ...(data.completed !== undefined && { completed: data.completed }),
+    };
+
+    if (Object.prototype.hasOwnProperty.call(data, "dueDate")) {
+      payload.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+    }
+
+    await prisma.todo.update({
       where: { id: todoId },
-      data: {
-        ...(data.title !== undefined && { title: data.title.trim() }),
-        ...(data.description !== undefined && { description: data.description?.trim() || null }),
-        ...(data.completed !== undefined && { completed: data.completed }),
-      },
+      data: payload,
     });
+
     revalidatePath("/todos");
     revalidatePath("/dashboard");
+
     return { success: true };
   } catch (err) {
     console.error("updateTodo error:", err);
@@ -57,11 +79,13 @@ export async function updateTodo(
 
 export async function deleteTodo(todoId: string): Promise<ActionResult> {
   try {
-    await prisma.todo.deleteMany({
+    await prisma.todo.delete({
       where: { id: todoId },
     });
+
     revalidatePath("/todos");
     revalidatePath("/dashboard");
+
     return { success: true };
   } catch (err) {
     console.error("deleteTodo error:", err);

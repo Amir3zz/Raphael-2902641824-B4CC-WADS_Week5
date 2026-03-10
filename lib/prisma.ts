@@ -1,3 +1,4 @@
+// lib/prisma.ts
 import fs from "fs";
 import path from "path";
 
@@ -6,8 +7,9 @@ type Todo = {
   title: string;
   description: string | null;
   completed: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
+  dueDate?: string | null;
   userId?: string | null;
 };
 
@@ -55,8 +57,10 @@ export const prisma = {
           for (const ord of orderBy) {
             const key = Object.keys(ord)[0];
             const dir = ord[key];
-            if (a[key] < b[key]) return dir === "asc" ? -1 : 1;
-            if (a[key] > b[key]) return dir === "asc" ? 1 : -1;
+            const av = a[key];
+            const bv = b[key];
+            if (av < bv) return dir === "asc" ? -1 : 1;
+            if (av > bv) return dir === "asc" ? 1 : -1;
           }
           return 0;
         });
@@ -66,10 +70,9 @@ export const prisma = {
 
     async create({ data }: { data: Partial<Todo> }) {
       const todos = readTodos();
-      const id =
-        typeof crypto !== "undefined" && (crypto as any).randomUUID
-          ? (crypto as any).randomUUID()
-          : String(Date.now()) + Math.floor(Math.random() * 1000);
+      const id = (typeof crypto !== "undefined" && (crypto as any).randomUUID)
+        ? (crypto as any).randomUUID()
+        : String(Date.now()) + Math.floor(Math.random() * 1000);
       const created = {
         id,
         title: data.title ?? "",
@@ -77,6 +80,7 @@ export const prisma = {
         completed: data.completed ?? false,
         createdAt: nowISO(),
         updatedAt: nowISO(),
+        dueDate: data.dueDate ?? null,
         userId: data.userId ?? null,
       };
       todos.push(created);
@@ -138,7 +142,7 @@ export const prisma = {
           !(
             (where?.id === undefined || t.id === where.id) &&
             (where?.userId === undefined || t.userId === where.userId)
-          ),
+          )
       );
       writeTodos(newTodos);
       return { count: todos.length - newTodos.length };

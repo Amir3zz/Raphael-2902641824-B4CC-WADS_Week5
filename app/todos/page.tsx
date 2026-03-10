@@ -13,6 +13,7 @@ export default async function TodosPage() {
     completed: t.completed,
     createdAt: new Date(t.createdAt),
     updatedAt: new Date(t.updatedAt),
+    dueDate: t.dueDate ? new Date(t.dueDate) : null,
   }));
 
   return <TodoList initialTodos={initialTodos} />;

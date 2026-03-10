@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createTodo, updateTodo, deleteTodo } from "./actions";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+
 import {
   Dialog,
   DialogContent,
@@ -17,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
 import { toast } from "sonner";
 import { Loader2, Pencil, Trash2, Plus } from "lucide-react";
 
@@ -37,6 +41,7 @@ export type TodoItem = {
   completed: boolean;
   createdAt: Date;
   updatedAt: Date;
+  dueDate?: Date | null;
 };
 
 type TodoListProps = {
@@ -45,14 +50,15 @@ type TodoListProps = {
 
 export function TodoList({ initialTodos }: TodoListProps) {
   const router = useRouter();
+
   const [todos, setTodos] = useState<TodoItem[]>(initialTodos);
   const [isAdding, setIsAdding] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  
   useEffect(() => {
     setTodos(initialTodos);
   }, [initialTodos]);
-  
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -60,16 +66,21 @@ export function TodoList({ initialTodos }: TodoListProps) {
     e.preventDefault();
     const form = e.currentTarget;
     const formData = new FormData(form);
+
     const title = formData.get("title")?.toString().trim();
+
     if (!title) {
       toast.error("Title is required.");
       return;
     }
+
     setIsAdding(true);
+
     try {
       const result = await createTodo(formData);
+
       if (result.success) {
-        toast.success("Todo added.");
+        toast.success("Assignment added.");
         form.reset();
         router.refresh();
       } else {
@@ -84,34 +95,40 @@ export function TodoList({ initialTodos }: TodoListProps) {
 
   const handleToggleComplete = async (todo: TodoItem) => {
     try {
-      const result = await updateTodo(todo.id, { completed: !todo.completed });
+      const result = await updateTodo(todo.id, {
+        completed: !todo.completed,
+      });
+
       if (result.success) {
         setTodos((prev) =>
-          prev.map((t) => (t.id === todo.id ? { ...t, completed: !t.completed } : t))
+          prev.map((t) =>
+            t.id === todo.id ? { ...t, completed: !t.completed } : t
+          )
         );
         router.refresh();
-      } else {
-        toast.error(result.error);
       }
     } catch {
       toast.error("Failed to update.");
     }
   };
 
-  const handleEdit = async (todoId: string, title: string, description: string | null) => {
-    if (!title.trim()) {
-      toast.error("Title cannot be empty.");
-      return;
-    }
+  const handleEdit = async (
+    todoId: string,
+    title: string,
+    description: string | null,
+    dueDate: string | null
+  ) => {
     setEditingId(todoId);
+
     try {
       const result = await updateTodo(todoId, {
-        title: title.trim(),
-        description: description?.trim() || null,
+        title,
+        description,
+        dueDate,
       });
+
       if (result.success) {
-        toast.success("Todo updated.");
-        setEditingId(null);
+        toast.success("Assignment updated.");
         router.refresh();
       } else {
         toast.error(result.error);
@@ -125,66 +142,74 @@ export function TodoList({ initialTodos }: TodoListProps) {
 
   const handleDelete = async (todoId: string) => {
     setDeletingId(todoId);
+
     try {
       const result = await deleteTodo(todoId);
+
       if (result.success) {
         setTodos((prev) => prev.filter((t) => t.id !== todoId));
-        toast.success("Todo deleted.");
-        setDeletingId(null);
+        toast.success("Assignment deleted.");
         router.refresh();
-      } else {
-        toast.error(result.error);
-        setDeletingId(null);
       }
     } catch {
       toast.error("Failed to delete.");
+    } finally {
       setDeletingId(null);
     }
   };
 
+  const formatDateTime = (date: Date) => {
+    return new Date(date).toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" style={{ padding: 30 }}>
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">My Todo List</h2>
+        <h2 className="text-2xl font-bold tracking-tight">
+          My Assignment Logbook
+        </h2>
         <p className="text-muted-foreground">
-          Add, edit, and complete your tasks.
+          Add, edit, and complete your assignments.
         </p>
       </div>
 
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
-          <h3 className="font-semibold">Add a new todo</h3>
+      <Card>
+        <CardHeader>
+          <h3 className="font-semibold">Add a new assignment</h3>
         </CardHeader>
+
         <CardContent>
-          <form onSubmit={handleCreate} className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <form
+            onSubmit={handleCreate}
+            className="flex flex-col gap-4 sm:flex-row sm:items-end"
+          >
             <div className="flex-1 space-y-2">
-              <Label htmlFor="title">Title</Label>
-              <Input
-                id="title"
-                name="title"
-                placeholder="What needs to be done?"
-                required
-                maxLength={500}
-                disabled={isAdding}
-                className="h-10"
-              />
+              <Label>Title</Label>
+              <Input name="title" required placeholder="What needs to be done?" />
             </div>
-            <div className="flex-1 space-y-2 sm:max-w-xs">
-              <Label htmlFor="description">Description (optional)</Label>
-              <Input
-                id="description"
-                name="description"
-                placeholder="Add details…"
-                maxLength={1000}
-                disabled={isAdding}
-                className="h-10"
-              />
+
+            <div className="flex-1 space-y-2">
+              <Label>Description</Label>
+              <Input name="description" placeholder="Add details…" />
             </div>
-            <Button type="submit" disabled={isAdding} className="h-10 shrink-0">
+
+            <div className="space-y-2">
+              <Label>Due Date</Label>
+              <Input type="date" name="dueDate" />
+            </div>
+
+            <Button type="submit" disabled={isAdding}>
               {isAdding ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Adding…
+                  Adding
                 </>
               ) : (
                 <>
@@ -197,83 +222,104 @@ export function TodoList({ initialTodos }: TodoListProps) {
         </CardContent>
       </Card>
 
-      <Card className="shadow-sm">
-        <CardHeader className="pb-3">
+      <Card>
+        <CardHeader>
           <h3 className="font-semibold">Tasks</h3>
         </CardHeader>
+
         <CardContent>
           {todos.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No todos yet. Add one above.
+            <p className="text-sm text-muted-foreground text-center py-6">
+              No assignments yet.
             </p>
           ) : (
             <ul className="space-y-3">
               {todos.map((todo) => (
                 <li
                   key={todo.id}
-                  className="flex flex-col gap-2 rounded-lg border bg-card p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:gap-4"
+                  className="border rounded-lg p-4 hover:bg-muted/30 transition"
                 >
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <div className="flex items-start gap-3">
                     <Checkbox
-                      id={`check-${todo.id}`}
                       checked={todo.completed}
                       onCheckedChange={() => handleToggleComplete(todo)}
-                      className="mt-0.5 shrink-0"
                     />
-                    <div className="min-w-0 flex-1">
-                      <label
-                        htmlFor={`check-${todo.id}`}
-                        className={`cursor-pointer font-medium ${
-                          todo.completed ? "text-muted-foreground line-through" : ""
-                        }`}
+
+                    <div className="flex-1">
+                      <p
+                        className={`font-medium ${todo.completed ? "line-through text-muted-foreground" : ""
+                          }`}
                       >
                         {todo.title}
-                      </label>
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        Assigned: {formatDateTime(todo.createdAt)}
+                      </p>
+
+                      {todo.dueDate && (
+                        <p className="text-xs text-muted-foreground">
+                          Due: {new Date(todo.dueDate).toLocaleDateString("en-GB")}
+                        </p>
+                      )}
+
                       {todo.description && (
-                        <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
+                        <p
+                          onClick={() =>
+                            setExpandedId(
+                              expandedId === todo.id ? null : todo.id
+                            )
+                          }
+                          className={`text-sm text-muted-foreground mt-1 cursor-pointer ${expandedId === todo.id ? "" : "line-clamp-2"
+                            }`}
+                        >
                           {todo.description}
                         </p>
                       )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2 sm:shrink-0">
-                    <EditTodoDialog
-                      todo={todo}
-                      onSave={handleEdit}
-                      isEditing={editingId === todo.id}
-                      onOpenChange={(open) => !open && setEditingId(null)}
-                    />
-                    <AlertDialog
-                      open={deletingId === todo.id}
-                      onOpenChange={(open) => !open && setDeletingId(null)}
-                    >
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete todo</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete &quot;{todo.title}&quot;? This cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(todo.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setDeletingId(todo.id)}
+
+                    <div className="flex gap-2">
+                      <EditTodoDialog
+                        todo={todo}
+                        onSave={handleEdit}
+                        isEditing={editingId === todo.id}
+                        onOpenChange={() => { }}
+                      />
+
+                      <AlertDialog
+                        open={deletingId === todo.id}
+                        onOpenChange={(open) => !open && setDeletingId(null)}
                       >
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </AlertDialog>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Delete assignment
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{todo.title}"?
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+
+                            <AlertDialogAction
+                              onClick={() => handleDelete(todo.id)}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDeletingId(todo.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialog>
+                    </div>
                   </div>
                 </li>
               ))}
@@ -288,68 +334,63 @@ export function TodoList({ initialTodos }: TodoListProps) {
 function EditTodoDialog({
   todo,
   onSave,
-  isEditing,
-  onOpenChange,
-}: {
-  todo: TodoItem;
-  onSave: (id: string, title: string, description: string | null) => Promise<void>;
-  isEditing: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+}: any) {
   const [title, setTitle] = useState(todo.title);
   const [description, setDescription] = useState(todo.description ?? "");
+  const [dueDate, setDueDate] = useState(
+    todo.dueDate ? new Date(todo.dueDate).toISOString().split("T")[0] : ""
+  );
   const [open, setOpen] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(todo.id, title, description || null).then(() => setOpen(false));
+    onSave(todo.id, title, description || null, dueDate || null).then(() =>
+      setOpen(false)
+    );
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        onOpenChange(o);
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="shrink-0" disabled={isEditing}>
+        <Button variant="ghost" size="icon">
           <Pencil className="h-4 w-4" />
-          <span className="sr-only">Edit</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle>Edit todo</DialogTitle>
-          <DialogDescription>Change the title and description.</DialogDescription>
+          <DialogTitle>Edit assignment</DialogTitle>
+          <DialogDescription>Update details</DialogDescription>
         </DialogHeader>
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="edit-title">Title</Label>
-            <Input
-              id="edit-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Title"
-              required
-              maxLength={500}
-            />
+          <div>
+            <Label>Title</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-description">Description (optional)</Label>
+
+          <div>
+            <Label>Description</Label>
             <Input
-              id="edit-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Description"
-              maxLength={1000}
             />
           </div>
+
+          <div>
+            <Label>Due Date</Label>
+            <Input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
+
             <Button type="submit">Save</Button>
           </DialogFooter>
         </form>
